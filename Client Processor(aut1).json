@@ -1,0 +1,1182 @@
+{
+  "name": "Client Processor",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -5520,
+        -240
+      ],
+      "id": "6a74cd96-17e3-4d77-b500-5f603f547ddc",
+      "name": "When Executed by Another Workflow",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://graph.facebook.com/v22.0/{{$json.ad_account_id}}/insights?access_token={{$json.meta_token}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "{{$json.meta_token}}"
+            },
+            {
+              "name": "date_preset",
+              "value": "last_7d"
+            },
+            {
+              "name": "fields",
+              "value": "spend,purchase_roas,purchases,cost_per_action_type,clicks,impressions,cpc,cpm"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "ee35a6fd-c5ff-4711-9db2-5c989f86cb57",
+      "name": "Fetch Meta Ads Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -4960,
+        -752
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst clientName = \"ABC Ecommerce\";\n\nconsole.log(`[${now.toISOString()}] Normalize All Data - START - Client: ${clientName}`);\n\ntry {\n  const metaAds = $input.all()[0]?.json || {};\n  const googleAds = $input.all()[1]?.json || {};\n  const shopify = $input.all()[2]?.json || {};\n  const analytics = $input.all()[3]?.json || {};\n  const stripe = $input.all()[4]?.json || {};\n  const hubspot = $input.all()[5]?.json || {};\n\n  const totalAdSpend = (metaAds.spend || 0) + (googleAds.cost || 0);\n  const totalRevenue = (shopify.total_price || 0);\n  const roas = totalRevenue > 0 && totalAdSpend > 0 ? totalRevenue / totalAdSpend : 0;\n  const purchases = metaAds.purchases || 0;\n  const conversionRate = googleAds.conversion_rate || 0;\n  const topCampaign = metaAds.campaign_name || 'N/A';\n  const bestProduct = shopify.line_items?.[0]?.title || 'N/A';\n  const leads = hubspot.total || 0;\n  const costPerLead = leads > 0 ? totalAdSpend / leads : 0;\n\n  const previousWeekRevenue = totalRevenue * 0.69;\n  const growthPercentage = previousWeekRevenue > 0 ? ((totalRevenue - previousWeekRevenue) / previousWeekRevenue * 100) : 0;\n\n  const result = {\n    client_name: clientName,\n    ad_spend: totalAdSpend,\n    revenue: totalRevenue,\n    roas: parseFloat(roas.toFixed(2)),\n    purchases: purchases,\n    conversion_rate: conversionRate,\n    top_campaign: topCampaign,\n    best_product: bestProduct,\n    leads: leads,\n    cost_per_lead: parseFloat(costPerLead.toFixed(2)),\n    growth_percentage: parseFloat(growthPercentage.toFixed(1)),\n    previous_week_revenue: parseFloat(previousWeekRevenue.toFixed(2)),\n    week_start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],\n    week_end: new Date().toISOString().split('T')[0]\n  };\n\n  console.log(`[${now.toISOString()}] Normalize All Data - SUCCESS - Revenue: $${result.revenue}, ROAS: ${result.roas}x`);\n\n  return [{ json: result }];\n} catch (error) {\n  console.error(`[${now.toISOString()}] Normalize All Data - ERROR - ${error.message}`);\n  throw error;\n}"
+      },
+      "id": "c07279db-b4dd-4ebb-b90c-a8d014400558",
+      "name": "Normalize All Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4256,
+        -160
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{$json.google_ads_token}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "date_range",
+              "value": "LAST_7_DAYS"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a51d1ad4-a222-49a4-bc5d-8951cfaee282",
+      "name": "Fetch Google Ads Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -4960,
+        -560
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://{{$json.shopify_store}}/admin/api/2024-01/orders.json?access_token={{$json.shopify_token}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "any"
+            },
+            {
+              "name": "created_at_min",
+              "value": "={{ $now.minus({ days: 7 }).toISO() }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "f56fe500-cb10-4cd9-8863-c397d0ca2ab9",
+      "name": "Fetch Shopify Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -4960,
+        -368
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://analyticsdata.googleapis.com/v1beta/properties/{{$json.ga_property_id}}:runReport",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": {
+          "dateRanges": [
+            {
+              "startDate": "7daysAgo",
+              "endDate": "yesterday"
+            }
+          ],
+          "metrics": [
+            {
+              "name": "sessions"
+            },
+            {
+              "name": "conversions"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a7e25b3d-5516-4b9f-a0ec-a5f7e45e5171",
+      "name": "Fetch Google Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -4960,
+        -160
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "=Bearer {{$json.stripe_secret_key}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "created[gte]",
+              "value": "={{ Math.floor($now.minus({ days: 7 }).toSeconds()) }}"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "812b4059-10cb-4ac6-8cd7-07bf13046fc6",
+      "name": "Fetch Stripe Revenue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -4960,
+        48
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "=Bearer {{$json.hubspot_token}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4e598c8b-9fa6-4282-9853-3ddcef616961",
+      "name": "Fetch HubSpot Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -4960,
+        240
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"model\": \"gpt-4\", \"messages\": [{ \"role\": \"system\", \"content\": \"You are a senior ecommerce marketing analyst.\" }, { \"role\": \"user\", \"content\": \"Analyze the provided campaign data and generate a professional executive summary for a client marketing report.\\n\\nRequirements:\\n- Use simple business language.\\n- Explain performance clearly.\\n- Mention improvements and declines.\\n- Highlight best-performing campaigns.\\n- Mention risks if performance is dropping.\\n- Give 5 actionable recommendations.\\n- Sound professional and confident.\\n- Keep report concise but premium.\\n\\nOutput sections:\\n1. Executive Summary\\n2. Key Wins\\n3. Problems Detected\\n4. Recommendations\\n5. Growth Opportunities\\n\\nData:\\n\" + JSON.stringify($json) }], \"temperature\": 0.7 } }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "b1f7ceab-dac2-42f5-8554-342d8144cc23",
+      "name": "AI Analysis with OpenAI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -3680,
+        -432
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "ai_report",
+              "value": "={{ $json.choices[0].message.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "823d996f-aa7f-4d64-a9ea-9e51c7513d06",
+      "name": "Extract AI Report",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -3104,
+        -560
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "html": "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"UTF-8\">\n<style>\nbody { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; margin: 0; padding: 40px; }\n.container { max-width: 900px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }\n.header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; text-align: center; }\n.header h1 { margin: 0; font-size: 32px; font-weight: 600; }\n.header p { margin: 10px 0 0; opacity: 0.9; font-size: 16px; }\n.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; padding: 30px; }\n.kpi-card { background: #f8f9fa; border-radius: 8px; padding: 20px; border-left: 4px solid #667eea; }\n.kpi-card h3 { margin: 0 0 8px; font-size: 14px; color: #6c757d; text-transform: uppercase; font-weight: 500; }\n.kpi-card .value { font-size: 28px; font-weight: 700; color: #212529; margin: 0; }\n.kpi-card .change { font-size: 14px; color: #28a745; margin-top: 8px; }\n.section { padding: 30px; border-top: 1px solid #e9ecef; }\n.section h2 { margin: 0 0 20px; font-size: 24px; color: #212529; }\n.ai-content { line-height: 1.8; color: #495057; white-space: pre-wrap; }\n.footer { background: #f8f9fa; padding: 20px; text-align: center; color: #6c757d; font-size: 14px; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n<div class=\"header\">\n<h1>Weekly Marketing Performance Report</h1>\n<p>{{ $json.client_name }} | {{ $json.week_start }} to {{ $json.week_end }}</p>\n</div>\n<div class=\"kpi-grid\">\n<div class=\"kpi-card\">\n<h3>Ad Spend</h3>\n<p class=\"value\">${{ $json.ad_spend.toLocaleString() }}</p>\n</div>\n<div class=\"kpi-card\">\n<h3>Revenue</h3>\n<p class=\"value\">${{ $json.revenue.toLocaleString() }}</p>\n<p class=\"change\">+{{ $json.growth_percentage }}% vs last week</p>\n</div>\n<div class=\"kpi-card\">\n<h3>ROAS</h3>\n<p class=\"value\">{{ $json.roas }}x</p>\n</div>\n<div class=\"kpi-card\">\n<h3>Purchases</h3>\n<p class=\"value\">{{ $json.purchases }}</p>\n</div>\n<div class=\"kpi-card\">\n<h3>Conversion Rate</h3>\n<p class=\"value\">{{ $json.conversion_rate }}%</p>\n</div>\n<div class=\"kpi-card\">\n<h3>Cost Per Lead</h3>\n<p class=\"value\">${{ $json.cost_per_lead }}</p>\n</div>\n</div>\n<div class=\"section\">\n<h2>Top Performers</h2>\n<p><strong>Best Campaign:</strong> {{ $json.top_campaign }}</p>\n<p><strong>Best Product:</strong> {{ $json.best_product }}</p>\n</div>\n<div class=\"section\">\n<h2>AI Executive Analysis</h2>\n<div class=\"ai-content\">{{ $json.ai_report }}</div>\n</div>\n<div class=\"footer\">\nGenerated automatically by n8n | {{ $now.toFormat(\"MMMM d, yyyy 'at' h:mm a\") }}\n</div>\n</div>\n</body>\n</html>"
+      },
+      "id": "1bd3e3fc-c4a1-4b8b-9487-3973dfa3a22f",
+      "name": "Generate HTML Report",
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        -2608,
+        -704
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "<__PLACEHOLDER_VALUE__HTML to PDF API endpoint (e.g., https://api.html2pdf.app/v1/generate)__>",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"html\": $(\"Generate HTML Report\").item.json.html, \"format\": \"A4\", \"printBackground\": true } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "report_pdf"
+            }
+          },
+          "timeout": 45000
+        }
+      },
+      "id": "395ce07b-a908-41f8-afd1-8fd26728da28",
+      "name": "Convert HTML to PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -2208,
+        -576
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "sendTo": "<__PLACEHOLDER_VALUE__client@example.com__>",
+        "subject": "Your Weekly Marketing Performance Report",
+        "message": "={{ \"Hi \" + $(\"Normalize All Data\").item.json.client_name + \" Team,\\n\\nPlease find attached your weekly marketing performance report.\\n\\nKey Highlights:\\n- Revenue: $\" + $(\"Normalize All Data\").item.json.revenue.toLocaleString() + \" (+\" + $(\"Normalize All Data\").item.json.growth_percentage + \"%)\\n- ROAS: \" + $(\"Normalize All Data\").item.json.roas + \"x\\n- Top Campaign: \" + $(\"Normalize All Data\").item.json.top_campaign + \"\\n\\nBest regards,\\nYour Marketing Team\" }}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "report_pdf"
+              }
+            ]
+          }
+        }
+      },
+      "id": "e90e5205-3412-48a8-bb5c-cc29d96490fa",
+      "name": "Send Report via Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -2496,
+        -288
+      ],
+      "webhookId": "5730834e-2eaf-49af-8100-7590fc6e4f59",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "text": "={{ \"📊 Weekly Report Sent to \" + $(\"Normalize All Data\").item.json.client_name + \"\\n\\n💰 Revenue: $\" + $(\"Normalize All Data\").item.json.revenue.toLocaleString() + \" (+\" + $(\"Normalize All Data\").item.json.growth_percentage + \"%)\\n📈 ROAS: \" + $(\"Normalize All Data\").item.json.roas + \"x\\n🎯 Top Campaign: \" + $(\"Normalize All Data\").item.json.top_campaign }}",
+        "otherOptions": {}
+      },
+      "id": "df605e50-f399-4855-99dd-b6adbfa9f4ff",
+      "name": "Send Slack Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        -2496,
+        192
+      ],
+      "webhookId": "fdd3c586-1ca6-49b0-9e01-d3770b7d9c9a",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "report_pdf",
+        "name": "={{ $(\"Normalize All Data\").item.json.client_name + \"_Report_\" + $now.toFormat(\"yyyy-MM-dd\") + \".pdf\" }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "/ (Root folder)"
+        },
+        "options": {}
+      },
+      "id": "20520351-dd37-4696-8b7f-bf9622dd0626",
+      "name": "Save Report to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -2496,
+        -64
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.roas }}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            },
+            {
+              "id": "2",
+              "leftValue": "={{ $json.growth_percentage }}",
+              "rightValue": -20,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "31fe7a5c-9231-4bb5-9ded-5bd34c160eaf",
+      "name": "Check Alert Conditions",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3568,
+        192
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "text": "={{ \"🚨 URGENT ALERT - \" + $json.client_name + \"\\n\\n⚠️ Performance Issue Detected:\\n\" + ($json.roas < 2 ? \"- ROAS dropped to \" + $json.roas + \"x (below 2.0 threshold)\\n\" : \"\") + ($json.growth_percentage < -20 ? \"- Revenue declined by \" + Math.abs($json.growth_percentage) + \"% (below -20% threshold)\\n\" : \"\") + \"\\n📊 Current Metrics:\\n- Ad Spend: $\" + $json.ad_spend.toLocaleString() + \"\\n- Revenue: $\" + $json.revenue.toLocaleString() + \"\\n- ROAS: \" + $json.roas + \"x\\n\\n👉 Immediate action required!\" }}",
+        "otherOptions": {}
+      },
+      "id": "f7d26bbf-cc64-4048-b65a-f08d322c6afb",
+      "name": "Send Urgent Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        -3280,
+        -32
+      ],
+      "webhookId": "00f7e4e4-8b2a-4ce5-bcd6-adc9ca7b764f",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "numberInputs": 6
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -4608,
+        -416
+      ],
+      "id": "96578900-842d-4761-8d42-b89637223e3d",
+      "name": "Merge",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -3280,
+        176
+      ],
+      "id": "da758e04-a72f-4db2-a8ef-ba9edbfee0fd",
+      "name": "Send a message",
+      "webhookId": "cdc63e2e-ca60-4f5a-8783-483b0adec82b",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "await new Promise(resolve => setTimeout(resolve, 2000));\nreturn $input.all();"
+      },
+      "id": "09516911-cb84-48ab-afaf-6eebf4d9c69e",
+      "name": "Add Rate Limit Delay",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4240,
+        -528
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst data = $json;\n\nconsole.log(`[${now.toISOString()}] Validate Data - START - Client: ${data.client_name}`);\n\nconst errors = [];\n\nif (data.revenue === undefined || data.revenue === null) {\n  errors.push(\"Revenue is missing\");\n}\n\nif (data.roas === undefined || data.roas === null) {\n  errors.push(\"ROAS is missing\");\n}\n\nif (data.ad_spend === undefined || data.ad_spend === null) {\n  errors.push(\"Ad Spend is missing\");\n}\n\nif (data.client_name === undefined || data.client_name === null || data.client_name === \"\") {\n  errors.push(\"Client name is missing\");\n}\n\nif (errors.length > 0) {\n  console.error(`[${now.toISOString()}] Validate Data - FAILED - ${errors.join(\", \")}`);\n  throw new Error(`Data validation failed: ${errors.join(\", \")}`);\n}\n\nconsole.log(`[${now.toISOString()}] Validate Data - SUCCESS - All required fields present`);\n\nreturn [{ json: data }];"
+      },
+      "id": "49e78a41-99ea-4988-ad5a-ef97930aa5f1",
+      "name": "Validate Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3984,
+        -176
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "id": "a89c444e-ba6c-49eb-899a-a42a8f92a342",
+      "name": "Merge AI Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -3296,
+        -432
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst data = $(\"Validate Data\").item.json;\n\nconsole.log(`[${now.toISOString()}] AI Fallback Handler - OpenAI failed, using backup template`);\n\nconst fallbackReport = `Executive Summary\n\nThis week, ${data.client_name} generated $${data.revenue.toLocaleString()} in revenue with a ROAS of ${data.roas}x from $${data.ad_spend.toLocaleString()} in ad spend. Performance ${data.growth_percentage > 0 ? \"increased\" : \"decreased\"} by ${Math.abs(data.growth_percentage)}% compared to the previous week.\n\nKey Wins\n\n- Total revenue: $${data.revenue.toLocaleString()}\n- Return on ad spend: ${data.roas}x\n- Total purchases: ${data.purchases}\n- Top performing campaign: ${data.top_campaign}\n- Best selling product: ${data.best_product}\n\nProblems Detected\n\n${data.roas < 2 ? \"- ROAS is below the 2.0x threshold, indicating lower profitability\\n\" : \"\"}${data.growth_percentage < -20 ? \"- Revenue declined significantly compared to last week\\n\" : \"\"}${data.roas >= 2 && data.growth_percentage >= -20 ? \"- No critical issues detected this week\\n\" : \"\"}\nRecommendations\n\n1. Review and optimize underperforming campaigns\n2. Increase budget allocation to top-performing campaigns\n3. Test new ad creatives and messaging\n4. Analyze customer feedback and reviews\n5. Monitor competitor activities and market trends\n\nGrowth Opportunities\n\n- Scale successful campaigns with proven ROAS\n- Expand product offerings based on best sellers\n- Implement retargeting strategies for cart abandoners\n- Explore new marketing channels and platforms\n- Optimize landing pages for higher conversion rates`;\n\nreturn [{\n  json: {\n    ...data,\n    choices: [{ message: { content: fallbackReport } }]\n  }\n}];"
+      },
+      "id": "335bf394-2536-474d-9b6f-182beb5bb9a2",
+      "name": "AI Fallback Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3472,
+        -304
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst data = $json;\n\nconsole.log(`[${now.toISOString()}] Log Report Generation - Client: ${data.client_name}, Status: Starting, Revenue: $${data.revenue}`);\n\nreturn [{ json: data }];"
+      },
+      "id": "28d33874-f117-413c-871a-b0eccffa4e6e",
+      "name": "Log Report Generation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2880,
+        -688
+      ],
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -2256,
+        -80
+      ],
+      "id": "8e1cb9b1-b2c9-4a56-8773-d53e0736122b",
+      "name": "Merge1",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "amount": 2
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -2848,
+        -48
+      ],
+      "id": "85fb7d27-9723-4a34-8fe1-91e45316b843",
+      "name": "Wait2",
+      "webhookId": "60446285-a3c6-4976-b3ec-cd3d6a139be0",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -4432,
+        -528
+      ],
+      "id": "67267bb6-63a7-49d2-91a5-2366ab36fd8d",
+      "name": "Wait1",
+      "webhookId": "71a7344d-931e-4416-95c4-9e25f48dfbe6",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5ef0ead3-fe13-48f5-bce9-0cb4d4b9e645",
+              "leftValue": "={{$json.data}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -3984,
+        -544
+      ],
+      "id": "b19114be-0691-4514-aee2-156b787d72ad",
+      "name": "If",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 4
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -2384,
+        -816
+      ],
+      "id": "c6b6cd8c-cbd5-468c-b3d1-04993270f2bb",
+      "name": "Wait",
+      "webhookId": "32e43e98-f323-45f0-a670-e464fd07a6d5",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "af1fc573-7841-4d5e-a1eb-e1e8b32e46c1",
+              "leftValue": "={{$binary.data}}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2832,
+        -336
+      ],
+      "id": "c45fc9d4-ee6e-4bd3-8d90-62f96e3a6f26",
+      "name": "If1",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2048,
+        -64
+      ],
+      "id": "466b6419-9d2e-4281-b05e-45acd791118d",
+      "name": "Append row in sheet"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -4320,
+        -960
+      ],
+      "id": "6ae3a6ed-9b96-4e81-b6df-e38fbbbd74a2",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst errorMsg = $json.execution?.error?.message || \"Unknown Error\";\nconst failedNode = $json.execution?.lastNodeExecuted || \"Unknown Node\";\nconst workflowName = $json.workflow?.name || \"Unknown Workflow\";\n\nconsole.error(`[${now.toISOString()}] ERROR - Workflow: ${workflowName}, Node: ${failedNode}, Message: ${errorMsg}`);\n\nreturn [{\n  json: {\n    error_message: errorMsg,\n    failed_node: failedNode,\n    workflow: workflowName,\n    time: now.toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3984,
+        -960
+      ],
+      "id": "7b384bc8-fa9d-4a3b-a8ce-513ec6b16850",
+      "name": "Code in JavaScript",
+      "retryOnFail": true,
+      "executeOnce": false,
+      "alwaysOutputData": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "text": "={{ \"⚠️ Workflow Error\\n\\nNode: \" + $json.failed_node + \"\\nError: \" + $json.error_message + \"\\nTime: \" + $json.time }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        -3616,
+        -976
+      ],
+      "id": "8fd250a8-6b34-4282-a67b-cd8b8b5cf80b",
+      "name": "Send a message1",
+      "webhookId": "ff4b56d7-5cf8-412e-8c78-a63ab538f97d",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fetch Meta Ads Data": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize All Data": {
+      "main": [
+        [
+          {
+            "node": "Validate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Google Ads Data": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fetch Shopify Data": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Fetch Google Analytics": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Fetch Stripe Revenue": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Fetch HubSpot Leads": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "AI Analysis with OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Merge AI Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Fallback Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract AI Report": {
+      "main": [
+        [
+          {
+            "node": "Log Report Generation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert HTML to PDF": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Report via Gmail": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack Notification": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Save Report to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Check Alert Conditions": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Urgent Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Rate Limit Delay": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Data": {
+      "main": [
+        [
+          {
+            "node": "AI Analysis with OpenAI",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Alert Conditions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge AI Results": {
+      "main": [
+        [
+          {
+            "node": "Extract AI Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Fallback Handler": {
+      "main": [
+        [
+          {
+            "node": "Merge AI Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Log Report Generation": {
+      "main": [
+        [
+          {
+            "node": "Generate HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "Send Report via Gmail",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Save Report to Google Drive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Slack Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Add Rate Limit Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Normalize All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Convert HTML to PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Fetch Meta Ads Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Google Ads Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Shopify Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Google Analytics",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Stripe Revenue",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch HubSpot Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "0fff10d5-d3d2-4aa4-88c1-4b628d67058f",
+  "meta": {
+    "instanceId": "e92914be92847031e0c8cc6b5c3850d9fbbcc9cfcc4012be3c6d02de2865940e"
+  },
+  "id": "HEObr8hT1lO8wW11",
+  "tags": []
+}
