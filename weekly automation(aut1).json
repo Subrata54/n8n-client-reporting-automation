@@ -1,0 +1,222 @@
+{
+  "name": "weekly automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "63725777-ab93-4adc-93f5-8a410c5ff166",
+      "name": "Every Monday at 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -176,
+        384
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        176
+      ],
+      "id": "7eed9102-0dd2-4b61-9ee7-f26653f5458c",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst errorMsg = $json.execution?.error?.message || \"Unknown Error\";\nconst failedNode = $json.execution?.lastNodeExecuted || \"Unknown Node\";\nconst workflowName = $json.workflow?.name || \"Unknown Workflow\";\n\nconsole.error(`[${now.toISOString()}] ERROR - Workflow: ${workflowName}, Node: ${failedNode}, Message: ${errorMsg}`);\n\nreturn [{\n  json: {\n    error_message: errorMsg,\n    failed_node: failedNode,\n    workflow: workflowName,\n    time: now.toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        176
+      ],
+      "id": "088e2f18-884b-405e-a377-554a94c6b0e8",
+      "name": "Code in JavaScript",
+      "retryOnFail": true,
+      "executeOnce": false,
+      "alwaysOutputData": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "text": "={{ \"⚠️ Workflow Error\\n\\nNode: \" + $json.failed_node + \"\\nError: \" + $json.error_message + \"\\nTime: \" + $json.time }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.5,
+      "position": [
+        528,
+        160
+      ],
+      "id": "b42146d8-1995-49fb-a1ad-832899570cc8",
+      "name": "Send a message1",
+      "webhookId": "ff4b56d7-5cf8-412e-8c78-a63ab538f97d",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        144,
+        384
+      ],
+      "id": "04beb8d1-9655-4b25-830c-1408521eee25",
+      "name": "Get row(s) in sheet",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        432,
+        352
+      ],
+      "id": "6b1ff7f0-66e0-4ed7-b2e7-7665bd603dd4",
+      "name": "Loop Over Items",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "HEObr8hT1lO8wW11",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/HEObr8hT1lO8wW11",
+          "cachedResultName": "Client Processor"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        784,
+        368
+      ],
+      "id": "33432545-5303-4cee-a2d2-cd1123da9cd7",
+      "name": "Call 'Client Processor'",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Monday at 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Call 'Client Processor'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "22ba2a00-f32c-4a56-a4c3-8637ebf018bc",
+  "meta": {
+    "instanceId": "e92914be92847031e0c8cc6b5c3850d9fbbcc9cfcc4012be3c6d02de2865940e"
+  },
+  "id": "3of8JuEYQ2POUvG1",
+  "tags": []
+}
