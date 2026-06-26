@@ -110,7 +110,6 @@ Slack Notifications
 * Stripe API
 * HubSpot API
 * OpenAI
-* Google Drive
 * Gmail
 * Slack
 
